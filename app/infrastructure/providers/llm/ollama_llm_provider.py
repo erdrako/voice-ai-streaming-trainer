@@ -3,6 +3,7 @@ import json
 
 import httpx
 
+from app.application.exceptions import ProviderUnavailableError
 from app.config import Settings
 
 
@@ -46,20 +47,27 @@ class OllamaLanguageModelProvider:
             },
         }
 
-        async with self.client.stream(
-            "POST",
-            f"{self.settings.ollama_base_url}/api/chat",
-            json=payload,
-        ) as response:
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if not line:
-                    continue
+        try:
+            async with self.client.stream(
+                "POST",
+                f"{self.settings.ollama_base_url}/api/chat",
+                json=payload,
+                timeout=self.settings.llm_timeout_seconds,
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line:
+                        continue
 
-                event = json.loads(line)
-                content = event.get("message", {}).get("content", "")
-                if content:
-                    yield content
+                    event = json.loads(line)
+                    content = event.get("message", {}).get("content", "")
+                    if content:
+                        yield content
 
-                if event.get("done"):
-                    break
+                    if event.get("done"):
+                        break
+        except Exception as exc:
+            raise ProviderUnavailableError(
+                f"LLM provider failed: {exc}",
+                code="LLM_PROVIDER_UNAVAILABLE",
+            ) from exc

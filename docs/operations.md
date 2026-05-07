@@ -16,6 +16,8 @@ docker compose exec ollama ollama pull llama3.2:3b
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/health
+Invoke-RestMethod http://127.0.0.1:8000/health/live
+Invoke-RestMethod http://127.0.0.1:8000/health/ready
 Invoke-RestMethod http://127.0.0.1:9001/health
 Invoke-RestMethod http://127.0.0.1:9002/health
 Invoke-RestMethod http://127.0.0.1:8000/metrics/recent
@@ -63,6 +65,37 @@ Para agregar otro TTS:
 3. Agregar configuracion en `app/config.py` si hace falta.
 4. Registrar la nueva clase en `AppContainer`.
 5. Correr tests.
+
+## Provider selection por entorno
+
+Las variables se configuran en `.env` / `.env.example`:
+
+```text
+STT_PROVIDER=faster_whisper_http
+LLM_PROVIDER=ollama
+TTS_PROVIDER=piper_http
+EVENT_BUS_PROVIDER=redis
+EVENT_STORE_PROVIDER=sqlite
+```
+
+Para correr sin Redis en una prueba local:
+
+```text
+EVENT_BUS_PROVIDER=none
+```
+
+Para estudiar un template, se puede seleccionar `template`, sabiendo que el
+template lanza `NotImplementedError` hasta que se complete la implementacion.
+
+## Logs
+
+La API emite logs JSON. En Docker:
+
+```powershell
+docker compose logs api --tail 80
+```
+
+Esto es intencionalmente mas cercano a produccion que logs de texto libre.
 
 ## Problemas comunes
 

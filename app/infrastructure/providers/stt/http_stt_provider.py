@@ -2,7 +2,9 @@ from pathlib import Path
 
 import httpx
 
+from app.application.exceptions import ProviderUnavailableError
 from app.config import Settings
+from app.infrastructure.resilience.retry import retry_async
 
 
 class HttpSpeechToTextProvider:
@@ -33,11 +35,25 @@ class HttpSpeechToTextProvider:
     async def transcribe_audio(self, audio_path: Path, mime_type: str) -> str:
         """Send an audio file to the STT service and return normalized text."""
 
-        with audio_path.open("rb") as audio_file:
-            files = {"file": (audio_path.name, audio_file, mime_type)}
-            response = await self.client.post(
-                f"{self.settings.stt_base_url}/transcribe",
-                files=files,
+        async def operation() -> str:
+            with audio_path.open("rb") as audio_file:
+                files = {"file": (audio_path.name, audio_file, mime_type)}
+                response = await self.client.post(
+                    f"{self.settings.stt_base_url}/transcribe",
+                    files=files,
+                    timeout=self.settings.stt_timeout_seconds,
+                )
+            response.raise_for_status()
+            return response.json()["text"].strip()
+
+        try:
+            return await retry_async(
+                operation,
+                attempts=self.settings.provider_retry_attempts,
+                backoff_seconds=self.settings.provider_retry_backoff_seconds,
             )
-        response.raise_for_status()
-        return response.json()["text"].strip()
+        except Exception as exc:
+            raise ProviderUnavailableError(
+                f"STT provider failed: {exc}",
+                code="STT_PROVIDER_UNAVAILABLE",
+            ) from exc

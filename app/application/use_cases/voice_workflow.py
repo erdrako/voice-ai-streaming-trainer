@@ -1,7 +1,9 @@
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 import base64
+import logging
 
+from app.application.exceptions import WorkflowError
 from app.application.contracts.event_publisher import EventPublisher
 from app.application.contracts.language_model import LanguageModelProvider
 from app.application.contracts.speech_to_text import SpeechToTextProvider
@@ -67,6 +69,7 @@ class VoiceWorkflowUseCase:
         self.event_publisher = event_publisher
         self.audio_format_service = audio_format_service
         self.segmentation_service = segmentation_service
+        self.logger = logging.getLogger(__name__)
 
     async def handle_audio_chunk(self, session: VoiceSession, chunk: bytes) -> None:
         """
@@ -101,7 +104,16 @@ class VoiceWorkflowUseCase:
         temp_path = self._write_temp_audio(session)
         try:
             await self.event_publisher.emit(session, ServerEvent.TRANSCRIPTION_STARTED)
-            text = await self.stt_provider.transcribe_audio(temp_path, session.mime_type)
+            try:
+                text = await self.stt_provider.transcribe_audio(temp_path, session.mime_type)
+            except WorkflowError as exc:
+                await self.event_publisher.emit(
+                    session,
+                    ServerEvent.ERROR,
+                    code=exc.code,
+                    message=str(exc),
+                )
+                return
             trace.mark("transcription_completed_ms")
             await self.event_publisher.emit(
                 session,
@@ -128,22 +140,31 @@ class VoiceWorkflowUseCase:
         segment_buffer = ""
         segment_index = 0
 
-        async for delta in self.llm_provider.stream_response(session.conversation):
-            full_response += delta
-            segment_buffer += delta
-            if "llm_first_token_ms" not in trace.marks:
-                trace.mark("llm_first_token_ms")
+        try:
+            async for delta in self.llm_provider.stream_response(session.conversation):
+                full_response += delta
+                segment_buffer += delta
+                if "llm_first_token_ms" not in trace.marks:
+                    trace.mark("llm_first_token_ms")
 
-            await self.event_publisher.emit(session, ServerEvent.AI_RESPONSE_DELTA, text=delta)
+                await self.event_publisher.emit(session, ServerEvent.AI_RESPONSE_DELTA, text=delta)
 
-            ready_segments, segment_buffer = self.segmentation_service.extract_ready_segments(
-                segment_buffer
+                ready_segments, segment_buffer = self.segmentation_service.extract_ready_segments(
+                    segment_buffer
+                )
+                for segment in ready_segments:
+                    if not self.segmentation_service.has_speakable_text(segment):
+                        continue
+                    segment_index += 1
+                    await self._synthesize_segment(session, segment, segment_index)
+        except WorkflowError as exc:
+            await self.event_publisher.emit(
+                session,
+                ServerEvent.ERROR,
+                code=exc.code,
+                message=str(exc),
             )
-            for segment in ready_segments:
-                if not self.segmentation_service.has_speakable_text(segment):
-                    continue
-                segment_index += 1
-                await self._synthesize_segment(session, segment, segment_index)
+            return
 
         session.add_assistant_text(full_response)
         trace.mark("llm_completed_ms")
@@ -174,7 +195,21 @@ class VoiceWorkflowUseCase:
         """
 
         await self.event_publisher.emit(session, ServerEvent.TTS_STARTED, segment=segment_index)
-        speech = await self.tts_provider.synthesize_speech(text)
+        try:
+            speech = await self.tts_provider.synthesize_speech(text)
+        except WorkflowError as exc:
+            await self.event_publisher.emit(
+                session,
+                ServerEvent.ERROR,
+                code=exc.code,
+                message=f"TTS failed for segment {segment_index}; text response is still available.",
+            )
+            self.logger.warning(
+                "TTS segment failed",
+                extra={"session_id": session.session_id, "event_type": ServerEvent.ERROR.value},
+                exc_info=True,
+            )
+            return
         audio = base64.b64encode(speech).decode("ascii")
         await self.event_publisher.emit(
             session,
@@ -209,7 +244,16 @@ class VoiceWorkflowUseCase:
         session.last_partial_chunk = session.audio_chunks_received
         temp_path = self._write_temp_audio(session)
         try:
-            text = await self.stt_provider.transcribe_audio(temp_path, session.mime_type)
+            try:
+                text = await self.stt_provider.transcribe_audio(temp_path, session.mime_type)
+            except WorkflowError as exc:
+                await self.event_publisher.emit(
+                    session,
+                    ServerEvent.ERROR,
+                    code=exc.code,
+                    message="Partial transcription failed; final transcription will still run.",
+                )
+                return
             if text:
                 await self.event_publisher.emit(
                     session,

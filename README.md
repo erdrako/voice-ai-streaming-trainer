@@ -43,6 +43,7 @@ El flujo es real y local:
 - `redis`: stream local de eventos para desacoplar observabilidad.
 - `sqlite`: persistencia simple de sesiones, eventos y metricas.
 - `docker-compose`: orquestacion local.
+- `pydantic-settings`: configuracion tipada y validada.
 
 ## Estructura por capas
 
@@ -64,6 +65,19 @@ app/infrastructure/providers/tts/template_tts_provider.py
 app/infrastructure/messaging/template_event_bus.py
 app/infrastructure/persistence/template_event_store.py
 ```
+
+## Production-readiness training features
+
+- Configuracion tipada en `app/config.py`.
+- Seleccion de providers por variables de entorno.
+- Health checks:
+  - `/health/live`
+  - `/health/ready`
+- Logging JSON estructurado.
+- Retry/backoff simple en adapters HTTP.
+- Errores tipados con codigos estables.
+- Fallback parcial: si falla TTS, el texto sigue disponible.
+- Tests directos del application use case con fakes.
 
 ## Documentacion de entrenamiento
 

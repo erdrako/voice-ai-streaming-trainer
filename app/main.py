@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.composition.container import AppContainer
+from app.infrastructure.logging.structured import configure_logging
 from app.presentation.websocket.event_publisher import sanitize_payload
 from app.presentation.websocket.voice_socket import handle_voice_session
 
@@ -17,6 +18,7 @@ STATIC_DIR = BASE_DIR / "static"
 # A single container is created when the app module is imported. In .NET terms,
 # this is similar to building the service provider in Program.cs.
 container = AppContainer()
+configure_logging(container.settings.log_level)
 
 
 @asynccontextmanager
@@ -47,6 +49,32 @@ async def health() -> dict[str, str]:
     """
 
     return {"status": "ok"}
+
+
+@app.get("/health/live")
+async def live() -> dict[str, str]:
+    """
+    Liveness probe.
+
+    Production-oriented improvement:
+    This endpoint only confirms that the API process can answer. It does not
+    check dependencies.
+    """
+
+    return {"status": "alive"}
+
+
+@app.get("/health/ready")
+async def ready() -> dict:
+    """
+    Readiness probe.
+
+    Production-oriented improvement:
+    This endpoint checks STT, TTS, Ollama, event store and event bus reachability
+    so an orchestrator could decide whether to route traffic here.
+    """
+
+    return await container.readiness()
 
 
 @app.get("/metrics/recent")

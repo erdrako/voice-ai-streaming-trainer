@@ -24,6 +24,10 @@ El cliente graba audio y lo envia por chunks al backend por WebSocket. Un VAD si
 - Use tests con fakes porque los modelos reales son lentos y no deberian ser dependencia de los tests unitarios.
 - El STT parcial es una aproximacion por buffer acumulado, no streaming STT nativo.
 - Agregue template providers para mostrar donde reemplazar STT, LLM, TTS, EventBus y EventStore.
+- Agregue configuracion tipada con `pydantic-settings`.
+- Agregue health checks separados para liveness/readiness.
+- Agregue logging JSON estructurado.
+- Agregue errores tipados, retry/backoff y fallback cuando falla TTS.
 
 ## Limitaciones conscientes
 
@@ -45,3 +49,7 @@ El cliente graba audio y lo envia por chunks al backend por WebSocket. Un VAD si
 ## Frase util para entrevista
 
 > Refactorice el MVP hacia una arquitectura por capas. FastAPI queda en presentation, la orquestacion vive en application use cases, las reglas puras viven en domain y los detalles de Ollama, STT, TTS, Redis y SQLite viven en infrastructure. El use case depende de contratos inyectados, asi que puedo reemplazar Piper por otro TTS o Redis por otro broker registrando otro adapter en el composition root.
+
+## Frase sobre resiliencia
+
+> Tambien agregue readiness checks, configuracion tipada, logging estructurado y manejo de fallos por proveedor. Por ejemplo, si falla TTS, el flujo no pierde la respuesta textual: emite un error con codigo estable y continua cerrando el workflow con metricas.

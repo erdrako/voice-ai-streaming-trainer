@@ -182,6 +182,89 @@ Si Piper falla o se necesita otro TTS:
 3. Registrar la nueva clase en `app/composition/container.py`.
 4. No tocar `VoiceWorkflowUseCase`.
 
+## Configuracion y seleccion de providers
+
+La configuracion vive en:
+
+```text
+app/config.py
+```
+
+Usa `pydantic-settings`, por lo que las variables se validan al iniciar. Esto
+es similar a usar Options tipadas en .NET.
+
+Variables importantes:
+
+```text
+STT_PROVIDER=faster_whisper_http
+LLM_PROVIDER=ollama
+TTS_PROVIDER=piper_http
+EVENT_BUS_PROVIDER=redis
+EVENT_STORE_PROVIDER=sqlite
+```
+
+El selection logic esta centralizado en:
+
+```text
+app/composition/container.py
+```
+
+Esto permite cambiar implementaciones sin tocar el use case.
+
+## Health checks
+
+Endpoints:
+
+```text
+/health/live
+/health/ready
+```
+
+`/health/live` valida que el proceso responde. `/health/ready` valida
+dependencias necesarias para servir trafico real:
+
+- STT `/health`
+- TTS `/health`
+- Ollama `/api/tags`
+- EventStore
+- EventBus
+
+## Logging y resiliencia
+
+Logging:
+
+```text
+app/infrastructure/logging/structured.py
+```
+
+El logger escribe JSON para que sea mas facil enviarlo a una plataforma de
+observabilidad.
+
+Retry/backoff:
+
+```text
+app/infrastructure/resilience/retry.py
+```
+
+Los providers HTTP usan una politica simple de retry. En produccion podria
+reemplazarse por Tenacity, OpenTelemetry, circuit breakers o un gateway interno.
+
+Errores:
+
+```text
+app/application/exceptions.py
+```
+
+Los providers traducen fallos tecnicos a errores con codigos estables como:
+
+```text
+STT_PROVIDER_UNAVAILABLE
+LLM_PROVIDER_UNAVAILABLE
+TTS_PROVIDER_UNAVAILABLE
+```
+
+El use case puede manejar cada caso sin filtrar detalles internos al cliente.
+
 ## Workflow actual
 
 1. Browser envia `start_utterance`.

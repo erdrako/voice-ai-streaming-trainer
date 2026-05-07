@@ -101,3 +101,33 @@ flowchart TD
     Bus --> Redis["RedisEventBus"]
     SQLite --> Recent["GET /metrics/recent"]
 ```
+
+## Health readiness
+
+```mermaid
+flowchart TD
+    Ready["GET /health/ready"] --> Container["AppContainer.readiness"]
+    Container --> STT["STT /health"]
+    Container --> TTS["TTS /health"]
+    Container --> Ollama["Ollama /api/tags"]
+    Container --> Store["EventStore check"]
+    Container --> Bus["EventBus check"]
+    STT --> Status["ready / not_ready"]
+    TTS --> Status
+    Ollama --> Status
+    Store --> Status
+    Bus --> Status
+```
+
+## Provider selection
+
+```mermaid
+flowchart LR
+    Env["Environment variables"] --> Settings["Typed Settings"]
+    Settings --> Container["AppContainer"]
+    Container --> STTProvider["Selected STT provider"]
+    Container --> LLMProvider["Selected LLM provider"]
+    Container --> TTSProvider["Selected TTS provider"]
+    Container --> StoreProvider["Selected EventStore"]
+    Container --> BusProvider["Selected EventBus"]
+```
