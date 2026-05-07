@@ -18,6 +18,7 @@ docker compose exec ollama ollama pull llama3.2:3b
 Invoke-RestMethod http://127.0.0.1:8000/health
 Invoke-RestMethod http://127.0.0.1:9001/health
 Invoke-RestMethod http://127.0.0.1:9002/health
+Invoke-RestMethod http://127.0.0.1:8000/metrics/recent
 ```
 
 ## Abrir la UI
@@ -32,11 +33,14 @@ http://127.0.0.1:8000
 2. Confirmar que el estado diga `Conectado`.
 3. Enviar una pregunta por texto.
 4. Ver tokens de respuesta en streaming.
-5. Escuchar audio TTS al final.
+5. Escuchar audio TTS por segmentos.
 6. Grabar una frase corta.
-7. Ver la transcripcion.
-8. Ver la respuesta del LLM.
-9. Escuchar el audio generado.
+7. Esperar el corte automatico por silencio o detener manualmente.
+8. Ver parciales STT si la grabacion tuvo suficientes chunks.
+9. Ver la transcripcion final.
+10. Ver la respuesta del LLM.
+11. Escuchar el audio generado.
+12. Consultar `/metrics/recent`.
 
 ## Problemas comunes
 
@@ -66,9 +70,17 @@ El modelo default `base` prioriza velocidad. Para mejor calidad:
 WHISPER_MODEL=small
 ```
 
-### TTS tarda al final
+### TTS tarda
 
-Este MVP sintetiza la respuesta completa. Una mejora real seria sintetizar por frases mientras el LLM sigue generando.
+La app sintetiza por segmentos. Si sigue tardando, suele ser por CPU local, por segmentos demasiado largos o por usar una maquina con pocos recursos.
+
+### Redis no esta disponible fuera de Docker
+
+El bus de eventos es best-effort. Si corres tests o API fuera de Docker sin Redis, la app sigue funcionando y descarta esos publishes.
+
+### SQLite local
+
+En Docker, la base vive en el volumen `app-data`. Fuera de Docker, el default es `data/training.db`.
 
 ## Comandos utiles
 
@@ -76,6 +88,6 @@ Este MVP sintetiza la respuesta completa. Una mejora real seria sintetizar por f
 docker compose logs api --tail 80
 docker compose logs stt --tail 80
 docker compose logs tts --tail 80
+docker compose logs redis --tail 80
 docker compose down
 ```
-

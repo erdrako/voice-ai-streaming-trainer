@@ -9,8 +9,12 @@ const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
 const socket = new WebSocket(`${wsProtocol}://${location.host}/ws/session/${sessionId}`);
 
 let mediaRecorder = null;
-let chunks = [];
+let activeStream = null;
+let vadContext = null;
+let vadTimer = null;
 let currentAssistantMessage = null;
+const audioQueue = [];
+let isPlayingAudio = false;
 
 function setStatus(text, state = "") {
   statusEl.textContent = text;
@@ -49,6 +53,10 @@ socket.addEventListener("message", (event) => {
     addMessage("system", "Transcribiendo audio...");
   }
 
+  if (data.type === "transcription.partial") {
+    addMessage("system", `Parcial STT: ${data.text}`);
+  }
+
   if (data.type === "transcription.completed") {
     addMessage("user", data.text);
   }
@@ -67,13 +75,19 @@ socket.addEventListener("message", (event) => {
   }
 
   if (data.type === "tts.started") {
-    addMessage("system", "Generando audio de respuesta...");
+    addMessage("system", `Generando audio segmento ${data.segment}...`);
+  }
+
+  if (data.type === "tts.segment.completed") {
+    queueAudio(data.mime_type, data.audio);
   }
 
   if (data.type === "tts.completed") {
-    const audio = new Audio(`data:${data.mime_type};base64,${data.audio}`);
-    audio.play();
-    addMessage("system", "Audio reproducido desde TTS local.");
+    addMessage("system", `TTS completado en ${data.segments} segmento(s).`);
+  }
+
+  if (data.type === "metrics") {
+    addMessage("system", `Metricas: ${JSON.stringify(data.metrics)}`);
   }
 
   if (data.type === "error") {
@@ -82,41 +96,101 @@ socket.addEventListener("message", (event) => {
   }
 });
 
-recordButton.addEventListener("click", async () => {
-  if (mediaRecorder && mediaRecorder.state === "recording") {
-    mediaRecorder.stop();
-    recordButton.textContent = "Grabar";
-    recordButton.classList.remove("recording");
+function queueAudio(mimeType, base64Audio) {
+  audioQueue.push(`data:${mimeType};base64,${base64Audio}`);
+  playNextAudio();
+}
+
+function playNextAudio() {
+  if (isPlayingAudio || audioQueue.length === 0) {
     return;
   }
 
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  isPlayingAudio = true;
+  const audio = new Audio(audioQueue.shift());
+  audio.addEventListener("ended", () => {
+    isPlayingAudio = false;
+    playNextAudio();
+  });
+  audio.play();
+}
+
+function stopRecording() {
+  if (!mediaRecorder || mediaRecorder.state !== "recording") {
+    return;
+  }
+
+  mediaRecorder.stop();
+  recordButton.textContent = "Grabar";
+  recordButton.classList.remove("recording");
+}
+
+function startVad(stream) {
+  vadContext = new AudioContext();
+  const source = vadContext.createMediaStreamSource(stream);
+  const analyser = vadContext.createAnalyser();
+  const samples = new Uint8Array(analyser.fftSize);
+  let silentFrames = 0;
+
+  source.connect(analyser);
+
+  vadTimer = window.setInterval(() => {
+    analyser.getByteTimeDomainData(samples);
+    const average = samples.reduce((sum, value) => sum + Math.abs(value - 128), 0) / samples.length;
+
+    if (average < 3.5) {
+      silentFrames += 1;
+    } else {
+      silentFrames = 0;
+    }
+
+    if (silentFrames > 18 && mediaRecorder?.state === "recording") {
+      addMessage("system", "Silencio detectado, cerrando utterance...");
+      stopRecording();
+    }
+  }, 100);
+}
+
+function stopVad() {
+  if (vadTimer) {
+    window.clearInterval(vadTimer);
+    vadTimer = null;
+  }
+  if (vadContext) {
+    vadContext.close();
+    vadContext = null;
+  }
+}
+
+recordButton.addEventListener("click", async () => {
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    stopRecording();
+    return;
+  }
+
+  activeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
     ? "audio/webm;codecs=opus"
     : "audio/webm";
 
-  chunks = [];
-  mediaRecorder = new MediaRecorder(stream, { mimeType });
+  mediaRecorder = new MediaRecorder(activeStream, { mimeType });
+  sendJson({ type: "start_utterance", mime_type: mimeType });
 
-  mediaRecorder.addEventListener("dataavailable", (event) => {
+  mediaRecorder.addEventListener("dataavailable", async (event) => {
     if (event.data.size > 0) {
-      chunks.push(event.data);
+      socket.send(await event.data.arrayBuffer());
     }
   });
 
-  mediaRecorder.addEventListener("stop", async () => {
-    stream.getTracks().forEach((track) => track.stop());
-
-    const blob = new Blob(chunks, { type: mimeType });
-    const buffer = await blob.arrayBuffer();
-
-    addMessage("system", `Enviando ${(blob.size / 1024).toFixed(1)} KB de audio...`);
-    sendJson({ type: "start_utterance", mime_type: mimeType });
-    socket.send(buffer);
+  mediaRecorder.addEventListener("stop", () => {
+    activeStream.getTracks().forEach((track) => track.stop());
+    stopVad();
+    addMessage("system", "Procesando utterance...");
     sendJson({ type: "end_utterance" });
   });
 
-  mediaRecorder.start();
+  mediaRecorder.start(750);
+  startVad(activeStream);
   recordButton.textContent = "Detener";
   recordButton.classList.add("recording");
 });

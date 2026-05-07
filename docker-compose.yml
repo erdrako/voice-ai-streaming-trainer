@@ -9,6 +9,9 @@ services:
       - ollama
       - stt
       - tts
+      - redis
+    volumes:
+      - app-data:/data
 
   ollama:
     image: ollama/ollama:latest
@@ -16,6 +19,10 @@ services:
       - "11434:11434"
     volumes:
       - ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          memory: 4G
 
   stt:
     build:
@@ -28,6 +35,10 @@ services:
       - "9001:9001"
     volumes:
       - hf-cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          memory: 2G
 
   tts:
     build:
@@ -37,6 +48,12 @@ services:
     ports:
       - "9002:9002"
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
 volumes:
   ollama:
   hf-cache:
+  app-data:

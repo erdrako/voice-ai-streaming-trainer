@@ -16,10 +16,8 @@ class FakeLocalAIService:
 
     async def stream_response(self, conversation):
         assert conversation[-1]["role"] == "user"
-        for delta in ["Un WebSocket ", "mantiene una conexion ", "bidireccional."]:
+        for delta in ["Un WebSocket ", "mantiene una conexion ", "bidireccional. ", "Sirve para tiempo real."]:
             yield delta
 
     async def synthesize_speech(self, text):
-        assert "WebSocket" in text
-        return b"RIFFfake-wav"
-
+        return f"RIFFfake-wav-{text}".encode()
