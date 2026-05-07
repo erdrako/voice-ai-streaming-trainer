@@ -282,6 +282,39 @@ El use case puede manejar cada caso sin filtrar detalles internos al cliente.
 
 ## Puntos de extension
 
+### Exposure / Deployment
+
+La exposicion publica se trata como otro punto intercambiable, igual que STT,
+LLM, TTS, persistence y messaging:
+
+```text
+infra/cloudflare/quick-tunnel
+infra/terraform/cloudflare-named-tunnel
+infra/terraform/gcp-local-relay-reference
+```
+
+Implementacion funcional sin dominio:
+
+```text
+cloudflare_quick_tunnel
+```
+
+Implementacion futura con dominio:
+
+```text
+cloudflare_named_tunnel
+```
+
+Referencia GCP sin recursos reales:
+
+```text
+gcp_local_relay_reference
+```
+
+La razon de esta separacion es la misma que en los providers de codigo: cambiar
+la forma de exponer la app no deberia cambiar el workflow de voz ni los casos de
+uso internos.
+
 ### STT
 
 Contrato:

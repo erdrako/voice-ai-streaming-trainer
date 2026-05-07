@@ -29,6 +29,18 @@ Invoke-RestMethod http://127.0.0.1:8000/metrics/recent
 http://127.0.0.1:8000
 ```
 
+## Exponer con Cloudflare Quick Tunnel
+
+Este modo mantiene todo el procesamiento en tu maquina y publica una URL
+temporal `*.trycloudflare.com`:
+
+```powershell
+docker compose -f infra/cloudflare/quick-tunnel/docker-compose.quick-tunnel.yml up
+```
+
+Dejar esa terminal abierta mientras dure la demo. Al cerrar el proceso, la URL
+publica deja de funcionar.
+
 ## Checklist end-to-end
 
 1. Abrir la UI.

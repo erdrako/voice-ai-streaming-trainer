@@ -131,3 +131,37 @@ flowchart LR
     Container --> StoreProvider["Selected EventStore"]
     Container --> BusProvider["Selected EventBus"]
 ```
+
+## Exposure providers
+
+```mermaid
+flowchart TD
+    Browser["Browser publico"] --> Provider["Exposure provider"]
+    Provider --> Quick["Cloudflare Quick Tunnel<br/>sin dominio, URL temporal"]
+    Provider --> Named["Cloudflare Named Tunnel<br/>Terraform + dominio propio"]
+    Provider --> GCP["GCP Local Relay Reference<br/>sin recursos aplicados"]
+    Quick --> Local["Backend local en esta maquina"]
+    Named --> Local
+    GCP --> Local
+    Local --> Compose["Docker Compose<br/>FastAPI + Ollama + STT + TTS"]
+```
+
+## Cloudflare Quick Tunnel runtime
+
+```mermaid
+sequenceDiagram
+    participant U as Browser
+    participant CF as Cloudflare Edge
+    participant C as cloudflared local
+    participant A as FastAPI local
+    participant AI as Ollama/STT/TTS local
+
+    U->>CF: HTTPS / WebSocket
+    CF->>C: Tunnel connection
+    C->>A: http://host.docker.internal:8000
+    A->>AI: STT -> LLM -> TTS
+    AI-->>A: texto/audio
+    A-->>C: WebSocket events
+    C-->>CF: Tunnel response
+    CF-->>U: UI + audio + streaming events
+```

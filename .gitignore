@@ -9,3 +9,10 @@ dist/
 build/
 *.egg-info/
 data/
+.terraform/
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl

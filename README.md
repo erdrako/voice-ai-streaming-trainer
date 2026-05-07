@@ -84,6 +84,7 @@ app/infrastructure/persistence/template_event_store.py
 - [Arquitectura](docs/architecture.md)
 - [Diagramas](docs/diagrams.md)
 - [Operacion local](docs/operations.md)
+- [Deployment y exposicion publica](docs/deployment.md)
 - [Notas de entrevista](docs/interview-notes.md)
 
 ## Requisitos
@@ -182,3 +183,28 @@ pytest
 ```
 
 Para validar la app real con modelos locales, usa el checklist de [operacion local](docs/operations.md).
+
+## Exponer la app sin dominio ni costo cloud
+
+El backend real puede seguir corriendo en tu maquina y publicarse con una URL
+temporal de Cloudflare:
+
+```powershell
+docker compose up -d --build
+docker compose -f infra/cloudflare/quick-tunnel/docker-compose.quick-tunnel.yml up
+```
+
+El tunnel imprime una URL `https://*.trycloudflare.com`. Esa URL entra por
+Cloudflare y termina en tu FastAPI local. Ver [deployment](docs/deployment.md).
+
+Tambien existe una plantilla Terraform para Cloudflare con dominio propio en:
+
+```text
+infra/terraform/cloudflare-named-tunnel
+```
+
+La referencia GCP esta documentada sin recursos reales en:
+
+```text
+infra/terraform/gcp-local-relay-reference
+```
