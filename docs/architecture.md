@@ -1,153 +1,310 @@
 # Arquitectura
 
-Esta app es un proyecto de entrenamiento para practicar un backend de IA aplicada a voz. El objetivo no es crear un producto final, sino tener un MVP funcional que permita explicar decisiones tecnicas parecidas a las de proyectos reales: baja latencia, streaming, integracion con modelos locales, Docker, observabilidad y separacion de responsabilidades.
+Esta app es un proyecto de entrenamiento para practicar un backend de IA aplicada a voz con una estructura intencionalmente enterprise. El objetivo no es minimizar archivos, sino familiarizarse con capas, contratos, Dependency Injection, responsabilidad delegada y puntos de extension intercambiables.
 
-## Problema
+## Capas
 
-El flujo simula un asistente de voz local:
+```text
+app/
+  presentation/
+  application/
+  domain/
+  infrastructure/
+  composition/
+```
 
-1. El usuario graba audio desde el navegador.
-2. El navegador envia chunks por WebSocket y corta la utterance con VAD simple.
-3. Un servicio STT convierte audio a texto.
-4. Un LLM local genera respuesta en streaming.
-5. La API corta la respuesta en segmentos listos para voz.
-6. Un servicio TTS convierte cada segmento a audio.
-7. El navegador reproduce los segmentos de audio en orden.
-8. La API registra eventos, metricas y trazas de la sesion.
+### Presentation
 
-## Servicios
+Ubicacion:
 
-### `api`
+```text
+app/presentation/
+app/main.py
+static/
+```
 
-Responsabilidad principal: orquestar la sesion.
+Responsabilidad:
 
-- Expone el frontend estatico.
-- Mantiene el WebSocket con el navegador.
-- Recibe chunks de audio binario y eventos JSON.
-- Emite transcripciones parciales sobre el buffer acumulado.
-- Llama a STT, Ollama y TTS.
-- Streamea tokens del LLM hacia el cliente.
-- Sintetiza TTS por segmentos mientras llegan frases completas.
-- Publica eventos tecnicos en Redis.
-- Persiste eventos y metricas en SQLite.
-- Mantiene un historial simple por sesion WebSocket.
+- Exponer HTTP/WebSocket.
+- Parsear eventos del browser.
+- Enviar respuestas al cliente.
+- Delegar el workflow a application use cases.
 
-### `stt`
+No deberia:
 
-Responsabilidad principal: speech-to-text local.
+- Llamar directamente a Ollama/STT/TTS.
+- Tener reglas de negocio.
+- Conocer SQL, Redis o detalles de proveedores.
 
-- Expone `POST /transcribe`.
-- Recibe un archivo de audio.
-- Usa `faster-whisper`.
-- Devuelve texto transcripto.
+Archivos clave:
 
-### `ollama`
+- `app/main.py`: bootstrap FastAPI, health, metrics y WebSocket entrypoint.
+- `app/presentation/websocket/voice_socket.py`: handler de WebSocket.
+- `app/presentation/websocket/event_publisher.py`: adapter de salida para WebSocket.
 
-Responsabilidad principal: inferencia LLM local.
+### Application
 
-- Expone la API nativa de Ollama.
-- Recibe mensajes estilo chat.
-- Devuelve tokens en streaming.
-- Modelo default: `llama3.2:3b`.
+Ubicacion:
 
-### `tts`
+```text
+app/application/
+```
 
-Responsabilidad principal: text-to-speech local.
+Responsabilidad:
 
-- Expone `POST /synthesize`.
-- Recibe texto.
-- Usa Piper con una voz en espanol.
-- Devuelve audio WAV.
+- Orquestar casos de uso.
+- Definir contratos que necesita la app.
+- Coordinar STT -> LLM -> TTS sin conocer implementaciones concretas.
 
-### `redis`
+Archivos clave:
 
-Responsabilidad principal: event stream interno.
+- `app/application/use_cases/voice_workflow.py`
+- `app/application/contracts/speech_to_text.py`
+- `app/application/contracts/language_model.py`
+- `app/application/contracts/text_to_speech.py`
+- `app/application/contracts/event_store.py`
+- `app/application/contracts/event_bus.py`
+- `app/application/contracts/event_publisher.py`
 
-- Recibe eventos en el stream `voice_ai_events`.
-- Sirve como ejemplo de desacople para observabilidad o workers futuros.
-- Es best-effort: si Redis no esta disponible fuera de Docker, la API sigue funcionando.
+### Domain
 
-### `sqlite`
+Ubicacion:
 
-Responsabilidad principal: persistencia de entrenamiento.
+```text
+app/domain/
+```
 
-- Guarda sesiones.
-- Guarda eventos emitidos al cliente.
-- Guarda payloads de metricas.
-- Permite inspeccionar que paso durante una sesion sin montar una base pesada.
+Responsabilidad:
 
-## Decisiones tecnicas
+- Entidades y reglas puras.
+- Sin FastAPI, HTTPX, Redis, SQLite ni Docker.
 
-### Por que separar STT, LLM y TTS
+Archivos clave:
 
-Separar servicios permite cambiar una tecnologia sin reescribir todo el backend. Tambien facilita medir latencia por etapa:
+- `app/domain/entities/voice_session.py`
+- `app/domain/services/audio_format_service.py`
+- `app/domain/services/segmentation_service.py`
 
-- tiempo de subida del audio
-- tiempo de transcripcion
-- tiempo hasta el primer token del LLM
-- tiempo total de generacion
-- tiempo de sintetizado de voz
+### Infrastructure
 
-En produccion, cada servicio podria escalarse diferente. STT y TTS suelen necesitar CPU/GPU de forma distinta al LLM.
+Ubicacion:
 
-### Por que WebSocket
+```text
+app/infrastructure/
+```
 
-WebSocket mantiene una conexion persistente y permite enviar eventos en ambos sentidos:
+Responsabilidad:
 
-- cliente a servidor: inicio de utterance, chunks de audio, fin de utterance
-- servidor a cliente: transcripcion parcial, transcripcion final, tokens parciales, audio segmentado, metricas y errores
+- Implementar contratos definidos por application.
+- Encapsular detalles tecnicos de proveedores externos/locales.
 
-El navegador envia chunks de audio durante la grabacion y corta automaticamente con un VAD simple basado en energia. La API puede emitir transcripciones parciales re-transcribiendo el buffer acumulado cada cierta cantidad de chunks. La respuesta del LLM se streamea token a token.
+Implementaciones reales:
 
-### Como se mide latencia
+- STT: `app/infrastructure/providers/stt/http_stt_provider.py`
+- LLM: `app/infrastructure/providers/llm/ollama_llm_provider.py`
+- TTS: `app/infrastructure/providers/tts/http_tts_provider.py`
+- Redis: `app/infrastructure/messaging/redis_event_bus.py`
+- SQLite: `app/infrastructure/persistence/sqlite_event_store.py`
+- Telemetry: `app/infrastructure/telemetry/trace.py`
 
-Cada workflow crea una traza local. La API marca:
+Templates de extension:
 
-- `transcription_completed_ms`
-- `llm_first_token_ms`
-- `llm_completed_ms`
-- `workflow_completed_ms`
+- `template_stt_provider.py`
+- `template_llm_provider.py`
+- `template_tts_provider.py`
+- `template_event_bus.py`
+- `template_event_store.py`
 
-Esas metricas se envian al cliente como evento `metrics` y tambien quedan persistidas.
+### Composition
 
-### TTS por segmentos
+Ubicacion:
 
-Mientras Ollama genera tokens, la API acumula texto hasta detectar una frase completa. Cuando aparece un segmento terminado, lo manda a Piper y envia al navegador `tts.segment.completed`. Esto reduce la espera percibida frente a sintetizar toda la respuesta al final.
+```text
+app/composition/container.py
+```
 
-## Que es real y que esta acotado
+Responsabilidad:
 
-Real:
+- Crear dependencias concretas.
+- Inyectarlas en los use cases.
+- Actuar como equivalente Python de `ConfigureServices.cs` o `Program.cs` en .NET.
 
-- audio desde navegador
-- VAD simple en navegador
-- chunks de audio durante la grabacion
-- transcripcion parcial por buffer acumulado
-- transcripcion local
-- LLM local
-- TTS local por segmentos
-- Docker Compose
-- WebSocket
-- Redis para eventos internos
-- SQLite para eventos y metricas
+## Mapeo con .NET
 
-Acotado:
+```text
+Pacagroup.Ecommerce.Services.WebApi
+  -> app/presentation + app/main.py
 
-- la transcripcion parcial reusa el buffer acumulado; no es STT incremental nativo
-- no hay autenticacion
-- no hay dashboard de observabilidad
-- Redis se usa como stream local, no como arquitectura distribuida completa
+Pacagroup.Ecommerce.Application.Interface
+  -> app/application/contracts
 
-## Evolucion implementada
+Pacagroup.Ecommerce.Application.Main
+  -> app/application/use_cases
 
-Se implementaron los pasos de evolucion propuestos:
+Pacagroup.Ecommerce.Domain.Entity
+  -> app/domain/entities
 
-1. VAD simple en browser para cortar utterances por silencio.
-2. Envio de chunks de audio con `MediaRecorder.start(750)`.
-3. Transcripcion parcial por buffer acumulado con `transcription.partial`.
-4. Respuesta LLM por streaming token a token.
-5. TTS por segmentos de frase.
-6. Redis Stream `voice_ai_events` para eventos internos.
-7. SQLite para sesiones, eventos y metricas.
-8. Reservas de recursos por servicio en Docker Compose.
+Pacagroup.Ecommerce.Domain.Core
+  -> app/domain/services
 
-El punto 3 es una aproximacion del MVP: `faster-whisper` no se usa como streaming STT nativo, sino que se invoca sobre audio acumulado para obtener parciales.
+Pacagroup.Ecommerce.Infrastructure.Repository/Data
+  -> app/infrastructure/persistence
+
+Pacagroup.Ecommerce.Transversal.*
+  -> app/infrastructure/telemetry + app/config.py
+
+ConfigureServices.cs
+  -> app/composition/container.py
+```
+
+## Dependency Injection
+
+El use case no instancia proveedores concretos:
+
+```python
+class VoiceWorkflowUseCase:
+    def __init__(self, stt_provider, llm_provider, tts_provider, event_publisher, ...):
+        ...
+```
+
+El container decide que implementacion usar:
+
+```python
+self.stt_provider = HttpSpeechToTextProvider(...)
+self.llm_provider = OllamaLanguageModelProvider(...)
+self.tts_provider = HttpTextToSpeechProvider(...)
+```
+
+Si Piper falla o se necesita otro TTS:
+
+1. Crear una nueva clase en `app/infrastructure/providers/tts/`.
+2. Usar `template_tts_provider.py` como guia.
+3. Registrar la nueva clase en `app/composition/container.py`.
+4. No tocar `VoiceWorkflowUseCase`.
+
+## Workflow actual
+
+1. Browser envia `start_utterance`.
+2. Browser envia audio chunks por WebSocket.
+3. `voice_socket.py` delega chunks a `VoiceWorkflowUseCase.handle_audio_chunk`.
+4. El use case puede emitir `transcription.partial`.
+5. Browser envia `end_utterance`.
+6. El use case llama STT por contrato.
+7. El use case agrega el texto a `VoiceSession`.
+8. El use case llama LLM por contrato y streamea deltas.
+9. `SegmentationService` detecta frases listas para TTS.
+10. El use case llama TTS por contrato.
+11. `WebSocketEventPublisher` envia eventos al cliente.
+12. El publisher persiste eventos en SQLite y publica en Redis.
+
+## Puntos de extension
+
+### STT
+
+Contrato:
+
+```text
+app/application/contracts/speech_to_text.py
+```
+
+Implementacion actual:
+
+```text
+app/infrastructure/providers/stt/http_stt_provider.py
+```
+
+Template:
+
+```text
+app/infrastructure/providers/stt/template_stt_provider.py
+```
+
+### LLM
+
+Contrato:
+
+```text
+app/application/contracts/language_model.py
+```
+
+Implementacion actual:
+
+```text
+app/infrastructure/providers/llm/ollama_llm_provider.py
+```
+
+Template:
+
+```text
+app/infrastructure/providers/llm/template_llm_provider.py
+```
+
+### TTS
+
+Contrato:
+
+```text
+app/application/contracts/text_to_speech.py
+```
+
+Implementacion actual:
+
+```text
+app/infrastructure/providers/tts/http_tts_provider.py
+```
+
+Template:
+
+```text
+app/infrastructure/providers/tts/template_tts_provider.py
+```
+
+### Persistence
+
+Contrato:
+
+```text
+app/application/contracts/event_store.py
+```
+
+Implementacion actual:
+
+```text
+app/infrastructure/persistence/sqlite_event_store.py
+```
+
+Template:
+
+```text
+app/infrastructure/persistence/template_event_store.py
+```
+
+### Messaging
+
+Contrato:
+
+```text
+app/application/contracts/event_bus.py
+```
+
+Implementacion actual:
+
+```text
+app/infrastructure/messaging/redis_event_bus.py
+```
+
+Template:
+
+```text
+app/infrastructure/messaging/template_event_bus.py
+```
+
+## Sobre el nivel de comentarios
+
+El proyecto tiene comentarios mas detallados que un repositorio productivo normal porque tambien funciona como material de entrenamiento. Los comentarios explican:
+
+- responsabilidad de cada capa
+- variables importantes
+- donde se aplica Dependency Injection
+- donde se delega responsabilidad
+- donde se puede agregar una implementacion alternativa

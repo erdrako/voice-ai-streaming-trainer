@@ -42,6 +42,28 @@ http://127.0.0.1:8000
 11. Escuchar el audio generado.
 12. Consultar `/metrics/recent`.
 
+## Cambiar providers
+
+El cambio de implementaciones se hace en:
+
+```text
+app/composition/container.py
+```
+
+Ejemplo conceptual:
+
+```python
+self.tts_provider = HttpTextToSpeechProvider(...)
+```
+
+Para agregar otro TTS:
+
+1. Copiar `app/infrastructure/providers/tts/template_tts_provider.py`.
+2. Implementar `synthesize_speech`.
+3. Agregar configuracion en `app/config.py` si hace falta.
+4. Registrar la nueva clase en `AppContainer`.
+5. Correr tests.
+
 ## Problemas comunes
 
 ### Ollama no responde

@@ -1,9 +1,10 @@
-from app.main import audio_suffix
+from app.domain.services.audio_format_service import AudioFormatService
 
 
 def test_audio_suffix_detects_common_formats():
-    assert audio_suffix("audio/wav") == ".wav"
-    assert audio_suffix("audio/mp4") == ".mp4"
-    assert audio_suffix("audio/mpeg") == ".mp3"
-    assert audio_suffix("audio/webm;codecs=opus") == ".webm"
+    service = AudioFormatService()
 
+    assert service.suffix_for_mime_type("audio/wav") == ".wav"
+    assert service.suffix_for_mime_type("audio/mp4") == ".mp4"
+    assert service.suffix_for_mime_type("audio/mpeg") == ".mp3"
+    assert service.suffix_for_mime_type("audio/webm;codecs=opus") == ".webm"

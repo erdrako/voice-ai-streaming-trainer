@@ -1,12 +1,21 @@
 from fastapi.testclient import TestClient
 
-from app.main import app
-from tests.fakes import FakeLocalAIService
+from app.main import app, container
+from tests.fakes import (
+    FakeLanguageModelProvider,
+    FakeSpeechToTextProvider,
+    FakeTextToSpeechProvider,
+)
+
+
+def install_fake_providers():
+    container.stt_provider = FakeSpeechToTextProvider()
+    container.llm_provider = FakeLanguageModelProvider()
+    container.tts_provider = FakeTextToSpeechProvider()
 
 
 def test_text_message_streams_llm_and_returns_tts(monkeypatch):
-    FakeLocalAIService.instances.clear()
-    monkeypatch.setattr("app.main.LocalAIService", FakeLocalAIService)
+    install_fake_providers()
 
     client = TestClient(app)
 
@@ -42,12 +51,10 @@ def test_text_message_streams_llm_and_returns_tts(monkeypatch):
     assert len(segment_events) == 2
     assert segment_events[0]["mime_type"] == "audio/wav"
     assert segment_events[0]["audio"]
-    assert FakeLocalAIService.instances[-1].closed
 
 
 def test_audio_message_transcribes_then_streams_response(monkeypatch):
-    FakeLocalAIService.instances.clear()
-    monkeypatch.setattr("app.main.LocalAIService", FakeLocalAIService)
+    install_fake_providers()
 
     client = TestClient(app)
 

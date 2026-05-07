@@ -1,13 +1,17 @@
-from app.session import extract_ready_segments, has_speakable_text
+from app.domain.services.segmentation_service import SegmentationService
 
 
 def test_extract_ready_segments_returns_complete_sentences_and_remainder():
-    segments, remainder = extract_ready_segments("Hola mundo. Esto sigue")
+    service = SegmentationService()
+
+    segments, remainder = service.extract_ready_segments("Hola mundo. Esto sigue")
 
     assert segments == ["Hola mundo."]
     assert remainder == " Esto sigue"
 
 
 def test_has_speakable_text_rejects_punctuation_only_segments():
-    assert has_speakable_text("Hola")
-    assert not has_speakable_text('"')
+    service = SegmentationService()
+
+    assert service.has_speakable_text("Hola")
+    assert not service.has_speakable_text('"')

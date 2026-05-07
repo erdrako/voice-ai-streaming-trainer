@@ -1,22 +1,12 @@
-from enum import Enum
+"""
+Backward-compatible import location for voice event DTOs.
 
+The refactor moved event DTOs to `app.application.dto.voice_events` because
+they are application/presentation contracts rather than domain entities.
+Keeping this re-export avoids breaking older tests or notes while you study the
+new layered layout.
+"""
 
-class ClientEvent(str, Enum):
-    START_UTTERANCE = "start_utterance"
-    END_UTTERANCE = "end_utterance"
-    TEXT_MESSAGE = "text_message"
+from app.application.dto.voice_events import ClientEvent, ServerEvent
 
-
-class ServerEvent(str, Enum):
-    SESSION_READY = "session.ready"
-    TRANSCRIPTION_STARTED = "transcription.started"
-    TRANSCRIPTION_PARTIAL = "transcription.partial"
-    TRANSCRIPTION_COMPLETED = "transcription.completed"
-    AI_RESPONSE_STARTED = "ai.response.started"
-    AI_RESPONSE_DELTA = "ai.response.delta"
-    AI_RESPONSE_COMPLETED = "ai.response.completed"
-    TTS_STARTED = "tts.started"
-    TTS_SEGMENT_COMPLETED = "tts.segment.completed"
-    TTS_COMPLETED = "tts.completed"
-    METRICS = "metrics"
-    ERROR = "error"
+__all__ = ["ClientEvent", "ServerEvent"]

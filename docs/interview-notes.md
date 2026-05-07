@@ -2,22 +2,28 @@
 
 ## Pitch corto
 
-Este proyecto es un MVP local de IA aplicada a voz. Usa FastAPI con WebSocket para mantener una sesion interactiva, VAD simple en browser, faster-whisper para STT, Ollama para LLM local, Piper para TTS por segmentos, Redis para eventos internos y SQLite para trazas/metricas. Esta dockerizado con servicios separados para poder explicar escalabilidad, latencia e integracion entre componentes.
+Este proyecto es un MVP local de IA aplicada a voz con Clean Architecture / Hexagonal Architecture aplicada de forma didactica. Usa FastAPI con WebSocket para mantener una sesion interactiva, VAD simple en browser, faster-whisper para STT, Ollama para LLM local, Piper para TTS por segmentos, Redis para eventos internos y SQLite para trazas/metricas.
+
+La app esta organizada en presentation, application, domain, infrastructure y composition root para practicar patrones de mercado: Dependency Injection, Dependency Inversion, contratos, adapters intercambiables y responsabilidad delegada.
 
 ## Como describir el flujo
 
-El cliente graba audio y lo envia por chunks al backend por WebSocket. Un VAD simple detecta silencio y cierra la utterance. La API no hace inferencia directamente: orquesta servicios especializados. Durante la grabacion puede emitir parciales STT sobre el buffer acumulado. Al final manda el audio al servicio STT, usa la transcripcion como mensaje del usuario, llama a Ollama con streaming y reenvia tokens al navegador. A medida que detecta frases completas, llama a TTS por segmento y devuelve WAVs parciales al cliente.
+El cliente graba audio y lo envia por chunks al backend por WebSocket. Un VAD simple detecta silencio y cierra la utterance. La presentation layer no hace inferencia directamente: parsea transporte y delega a `VoiceWorkflowUseCase`. El use case coordina STT, LLM y TTS usando contratos inyectados. A medida que detecta frases completas, llama a TTS por segmento y devuelve WAVs parciales al cliente mediante un `EventPublisher`.
 
 ## Decisiones defendibles
 
 - Use WebSocket porque necesito una sesion bidireccional.
 - Separe STT, LLM y TTS para poder cambiar modelos y escalar etapas por separado.
 - Use Docker Compose para reproducibilidad local.
+- Separe presentation/application/domain/infrastructure para que el codigo crezca con menor acoplamiento.
+- Use constructor injection en los use cases.
+- Use contratos `Protocol` para que la application layer no dependa de proveedores concretos.
 - Agregue Redis como stream de eventos para desacoplar observabilidad.
 - Agregue SQLite para poder auditar sesiones y metricas sin una base pesada.
 - Sintetizo TTS por frases para mejorar latencia percibida.
 - Use tests con fakes porque los modelos reales son lentos y no deberian ser dependencia de los tests unitarios.
 - El STT parcial es una aproximacion por buffer acumulado, no streaming STT nativo.
+- Agregue template providers para mostrar donde reemplazar STT, LLM, TTS, EventBus y EventStore.
 
 ## Limitaciones conscientes
 
@@ -25,6 +31,7 @@ El cliente graba audio y lo envia por chunks al backend por WebSocket. Un VAD si
 - No hay autenticacion ni control de sesiones.
 - No hay dashboard visual de metricas.
 - Redis esta usado como stream local, no como sistema distribuido completo.
+- Los comentarios son mas largos que en produccion porque el repositorio es material de entrenamiento.
 
 ## Como lo evolucionaria
 
@@ -34,3 +41,7 @@ El cliente graba audio y lo envia por chunks al backend por WebSocket. Un VAD si
 4. Agregaria autenticacion y limites por sesion.
 5. Separaria despliegue por recursos reales: CPU para API, GPU para STT/LLM si aplica.
 6. Agregaria pruebas de carga y mediciones de latencia p95/p99.
+
+## Frase util para entrevista
+
+> Refactorice el MVP hacia una arquitectura por capas. FastAPI queda en presentation, la orquestacion vive en application use cases, las reglas puras viven en domain y los detalles de Ollama, STT, TTS, Redis y SQLite viven en infrastructure. El use case depende de contratos inyectados, asi que puedo reemplazar Piper por otro TTS o Redis por otro broker registrando otro adapter en el composition root.

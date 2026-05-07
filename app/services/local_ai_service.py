@@ -1,72 +1,49 @@
-from collections.abc import AsyncIterator
-from pathlib import Path
-import json
+"""
+Backward-compatible facade for the old combined AI service.
+
+New enterprise-style code uses three explicit provider contracts instead:
+- SpeechToTextProvider
+- LanguageModelProvider
+- TextToSpeechProvider
+
+This facade is kept only as a transition aid for older notes. New code should
+prefer the concrete providers under `app.infrastructure.providers.*`.
+"""
 
 import httpx
 
 from app.config import Settings
-
-
-SYSTEM_PROMPT = """
-Sos un asistente tecnico de entrenamiento para una entrevista backend.
-Responde en espanol rioplatense claro, con foco en arquitectura, Python async,
-WebSockets, SSE, eventos, baja latencia, cloud, Docker e integraciones locales.
-Se concreto y ayuda al usuario a practicar decisiones tecnicas reales.
-""".strip()
+from app.infrastructure.providers.llm.ollama_llm_provider import OllamaLanguageModelProvider
+from app.infrastructure.providers.stt.http_stt_provider import HttpSpeechToTextProvider
+from app.infrastructure.providers.tts.http_tts_provider import HttpTextToSpeechProvider
 
 
 class LocalAIService:
+    """
+    Transitional facade that delegates to the segregated providers.
+
+    Expansion note:
+    If this project were production code, this class could be deleted after all
+    callers migrate to the separate contracts. It remains here to make the
+    refactor easier to compare with the previous implementation.
+    """
+
     def __init__(self, settings: Settings):
         timeout = httpx.Timeout(settings.request_timeout_seconds)
-        self.settings = settings
         self.client = httpx.AsyncClient(timeout=timeout)
+        self.stt = HttpSpeechToTextProvider(settings, self.client)
+        self.llm = OllamaLanguageModelProvider(settings, self.client)
+        self.tts = HttpTextToSpeechProvider(settings, self.client)
 
     async def close(self) -> None:
         await self.client.aclose()
 
-    async def transcribe_audio(self, audio_path: Path, mime_type: str) -> str:
-        with audio_path.open("rb") as audio_file:
-            files = {"file": (audio_path.name, audio_file, mime_type)}
-            response = await self.client.post(
-                f"{self.settings.stt_base_url}/transcribe",
-                files=files,
-            )
-        response.raise_for_status()
-        return response.json()["text"].strip()
+    async def transcribe_audio(self, audio_path, mime_type: str) -> str:
+        return await self.stt.transcribe_audio(audio_path, mime_type)
 
-    async def stream_response(self, conversation: list[dict[str, str]]) -> AsyncIterator[str]:
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}, *conversation]
-        payload = {
-            "model": self.settings.ollama_model,
-            "messages": messages,
-            "stream": True,
-            "options": {
-                "temperature": 0.3,
-            },
-        }
-
-        async with self.client.stream(
-            "POST",
-            f"{self.settings.ollama_base_url}/api/chat",
-            json=payload,
-        ) as response:
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if not line:
-                    continue
-
-                event = json.loads(line)
-                content = event.get("message", {}).get("content", "")
-                if content:
-                    yield content
-
-                if event.get("done"):
-                    break
+    async def stream_response(self, conversation):
+        async for delta in self.llm.stream_response(conversation):
+            yield delta
 
     async def synthesize_speech(self, text: str) -> bytes:
-        response = await self.client.post(
-            f"{self.settings.tts_base_url}/synthesize",
-            json={"text": text},
-        )
-        response.raise_for_status()
-        return response.content
+        return await self.tts.synthesize_speech(text)

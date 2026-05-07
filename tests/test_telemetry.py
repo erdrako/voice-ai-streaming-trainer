@@ -1,4 +1,4 @@
-from app.main import sanitize_payload
+from app.presentation.websocket.event_publisher import sanitize_payload
 
 
 def test_sanitize_payload_replaces_audio_with_size():

@@ -2,6 +2,15 @@
 
 Mini app local y dockerizada para practicar proyectos backend de IA aplicada a voz.
 
+El proyecto esta intencionalmente refactorizado con una arquitectura por capas
+estilo enterprise para entrenamiento:
+
+```text
+presentation -> application -> domain
+application contracts <- infrastructure adapters
+composition/container.py -> dependency injection wiring
+```
+
 ## Workflow end-to-end
 
 ```text
@@ -34,6 +43,27 @@ El flujo es real y local:
 - `redis`: stream local de eventos para desacoplar observabilidad.
 - `sqlite`: persistencia simple de sesiones, eventos y metricas.
 - `docker-compose`: orquestacion local.
+
+## Estructura por capas
+
+```text
+app/
+  presentation/      FastAPI/WebSocket adapters
+  application/       use cases, contracts, DTOs
+  domain/            entities and pure domain services
+  infrastructure/    concrete providers: Ollama, STT, TTS, Redis, SQLite
+  composition/       DI container / composition root
+```
+
+Los providers reales tienen templates al lado para practicar reemplazos:
+
+```text
+app/infrastructure/providers/stt/template_stt_provider.py
+app/infrastructure/providers/llm/template_llm_provider.py
+app/infrastructure/providers/tts/template_tts_provider.py
+app/infrastructure/messaging/template_event_bus.py
+app/infrastructure/persistence/template_event_store.py
+```
 
 ## Documentacion de entrenamiento
 
