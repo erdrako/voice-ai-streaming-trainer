@@ -1,0 +1,42 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - ollama
+      - stt
+      - tts
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+
+  stt:
+    build:
+      context: ./services/stt
+    environment:
+      WHISPER_MODEL: ${WHISPER_MODEL:-base}
+      WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
+      WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
+    ports:
+      - "9001:9001"
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+
+  tts:
+    build:
+      context: ./services/tts
+    environment:
+      PIPER_MODEL: /voices/es_ES-sharvard-medium.onnx
+    ports:
+      - "9002:9002"
+
+volumes:
+  ollama:
+  hf-cache:
