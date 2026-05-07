@@ -4,28 +4,196 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Voice AI Streaming Trainer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <section class="panel">
-        <div class="topbar">
-          <div>
-            <p class="eyebrow">Backend interview trainer</p>
-            <h1>Voice AI Streaming</h1>
+    <main class="page-shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Portfolio backend + voice AI</p>
+          <h1>Voice AI Streaming Trainer</h1>
+          <p class="hero-text">
+            Aplicacion local orientada a portfolio para demostrar un backend de voz
+            en tiempo real con streaming, capas desacopladas, providers
+            intercambiables y preocupaciones de produccion explicitas.
+          </p>
+          <div class="hero-metrics">
+            <article>
+              <span class="metric-label">Stack principal</span>
+              <strong>FastAPI, WebSocket, Ollama, Whisper, Piper</strong>
+            </article>
+            <article>
+              <span class="metric-label">Arquitectura</span>
+              <strong>Presentation / Application / Domain / Infrastructure</strong>
+            </article>
+            <article>
+              <span class="metric-label">Operativa</span>
+              <strong>Docker Compose, Redis, SQLite, health checks</strong>
+            </article>
           </div>
-          <span id="status" class="status">Conectando...</span>
         </div>
 
-        <div id="timeline" class="timeline" aria-live="polite"></div>
+        <aside class="hero-aside">
+          <div class="status-card">
+            <div>
+              <p class="card-label">Estado del runtime</p>
+              <h2>Sesion activa</h2>
+            </div>
+            <span id="status" class="status">Conectando...</span>
+          </div>
+          <div class="architecture-flow">
+            <p class="card-label">Flujo end-to-end</p>
+            <ol>
+              <li>Browser graba o envia texto.</li>
+              <li>FastAPI recibe eventos por WebSocket.</li>
+              <li>STT transcribe, LLM responde en streaming.</li>
+              <li>TTS sintetiza segmentos y el cliente reproduce audio.</li>
+            </ol>
+          </div>
+        </aside>
+      </section>
 
-        <div class="composer">
-          <button id="recordButton" class="record" type="button">Grabar</button>
-          <form id="textForm" class="text-form">
-            <input id="textInput" type="text" placeholder="O escribi una pregunta tecnica..." autocomplete="off" />
-            <button type="submit">Enviar</button>
-          </form>
-        </div>
+      <section class="highlights">
+        <article class="info-card">
+          <p class="card-label">Stack tecnologico</p>
+          <ul class="tag-grid">
+            <li>FastAPI</li>
+            <li>WebSocket</li>
+            <li>HTTPX async</li>
+            <li>Ollama</li>
+            <li>faster-whisper</li>
+            <li>Piper TTS</li>
+            <li>Redis</li>
+            <li>SQLite</li>
+            <li>Docker Compose</li>
+            <li>Terraform + Cloudflare</li>
+          </ul>
+        </article>
+
+        <article class="info-card">
+          <p class="card-label">Buenas practicas aplicadas</p>
+          <ul class="bullet-list">
+            <li>Configuracion tipada con `pydantic-settings`.</li>
+            <li>Dependency Injection desde un composition root.</li>
+            <li>Contratos para STT, LLM, TTS, persistence y messaging.</li>
+            <li>Health checks separados entre liveness y readiness.</li>
+            <li>Logging estructurado, retries simples y errores estables.</li>
+            <li>Tests de use case con fakes, sin depender de modelos pesados.</li>
+          </ul>
+        </article>
+
+        <article class="info-card">
+          <p class="card-label">Como esta armado</p>
+          <div class="code-block">
+            <pre>presentation -> application -> domain
+application contracts <- infrastructure
+composition/container.py -> dependency injection</pre>
+          </div>
+        </article>
+      </section>
+
+      <section class="workspace">
+        <section class="panel console-panel">
+          <div class="section-heading">
+            <div>
+              <p class="card-label">Demo interactiva</p>
+              <h2>Consola de voz y texto</h2>
+            </div>
+            <p class="section-copy">
+              Proba preguntas tecnicas, grabacion por chunks y reproduccion TTS por
+              segmentos. La consola refleja parciales, deltas y metricas del workflow.
+            </p>
+          </div>
+
+          <div class="quick-prompts" aria-label="Prompts sugeridos">
+            <button class="prompt-chip" type="button" data-prompt="Explicame el stack tecnologico de esta aplicacion.">
+              Stack
+            </button>
+            <button class="prompt-chip" type="button" data-prompt="Describi la arquitectura por capas y por que sirve para portfolio.">
+              Arquitectura
+            </button>
+            <button class="prompt-chip" type="button" data-prompt="Que buenas practicas de backend aplica este proyecto?">
+              Buenas practicas
+            </button>
+            <button class="prompt-chip" type="button" data-prompt="Como defenderias esta app en una entrevista tecnica?">
+              Entrevista
+            </button>
+          </div>
+
+          <details class="diagnostics">
+            <summary>Diagnostico tecnico</summary>
+            <div class="diagnostics-body">
+              <p class="diagnostics-copy">
+                Eventos operativos, segmentos TTS y metricas recientes del workflow.
+              </p>
+              <div id="diagnosticsTimeline" class="diagnostics-timeline" aria-live="polite"></div>
+            </div>
+          </details>
+
+          <div id="timeline" class="timeline" aria-live="polite"></div>
+
+          <div class="composer">
+            <button id="recordButton" class="record" type="button">Grabar</button>
+            <form id="textForm" class="text-form">
+              <input
+                id="textInput"
+                type="text"
+                placeholder="Pregunta por arquitectura, stack, decisiones tecnicas o graba audio..."
+                autocomplete="off"
+              />
+              <button type="submit">Enviar</button>
+            </form>
+          </div>
+        </section>
+
+        <aside class="panel context-panel">
+          <div class="section-heading compact">
+            <div>
+              <p class="card-label">Guia de portfolio</p>
+              <h2>Que comunica esta app</h2>
+            </div>
+          </div>
+
+          <section class="context-block">
+            <h3>Arquitectura</h3>
+            <p>
+              Separa transporte, orquestacion, reglas puras e integraciones para
+              poder cambiar proveedores sin reescribir el workflow central.
+            </p>
+          </section>
+
+          <section class="context-block">
+            <h3>Escalabilidad conceptual</h3>
+            <p>
+              Redis y SQLite son simples, pero muestran eventos, telemetria y
+              persistencia desacoplada. El mismo patron se puede migrar a servicios
+              mayores sin tocar los contratos.
+            </p>
+          </section>
+
+          <section class="context-block">
+            <h3>Operabilidad</h3>
+            <p>
+              Incluye Docker Compose, readiness checks y opciones de exposicion por
+              Cloudflare para demos reales sin subir la inferencia a la nube.
+            </p>
+          </section>
+
+          <section class="context-block">
+            <h3>Narrativa de entrevista</h3>
+            <p>
+              La app sirve para hablar de latencia, streaming, resiliencia,
+              intercambio de providers, observabilidad y decisiones de diseño con
+              criterio de produccion.
+            </p>
+          </section>
+        </aside>
       </section>
     </main>
 

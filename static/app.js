@@ -1,8 +1,10 @@
 const statusEl = document.querySelector("#status");
 const timeline = document.querySelector("#timeline");
+const diagnosticsTimeline = document.querySelector("#diagnosticsTimeline");
 const recordButton = document.querySelector("#recordButton");
 const textForm = document.querySelector("#textForm");
 const textInput = document.querySelector("#textInput");
+const promptButtons = document.querySelectorAll("[data-prompt]");
 
 const sessionId = crypto.randomUUID();
 const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
@@ -30,12 +32,28 @@ function addMessage(kind, text = "") {
   return node;
 }
 
+function addDiagnostic(text = "") {
+  if (!diagnosticsTimeline) {
+    return;
+  }
+
+  const node = document.createElement("div");
+  node.className = "diagnostic-entry";
+  node.textContent = text;
+  diagnosticsTimeline.appendChild(node);
+  diagnosticsTimeline.scrollTop = diagnosticsTimeline.scrollHeight;
+}
+
 function sendJson(payload) {
   socket.send(JSON.stringify(payload));
 }
 
 socket.addEventListener("open", () => {
   setStatus("Conectado", "ready");
+  addMessage(
+    "system",
+    "Demo lista. Esta UI presenta el stack, la arquitectura y tambien permite probar el workflow de voz en tiempo real."
+  );
 });
 
 socket.addEventListener("close", () => {
@@ -47,18 +65,21 @@ socket.addEventListener("message", (event) => {
 
   if (data.type === "session.ready") {
     addMessage("system", `Sesion ${data.session_id} lista. Graba audio o envia texto.`);
+    addDiagnostic(`Sesion ${data.session_id} lista.`);
   }
 
   if (data.type === "transcription.started") {
     addMessage("system", "Transcribiendo audio...");
+    addDiagnostic("Inicio de transcripcion.");
   }
 
   if (data.type === "transcription.partial") {
-    addMessage("system", `Parcial STT: ${data.text}`);
+    addDiagnostic(`Parcial STT: ${data.text}`);
   }
 
   if (data.type === "transcription.completed") {
     addMessage("user", data.text);
+    addDiagnostic(`Transcripcion final: ${data.text}`);
   }
 
   if (data.type === "ai.response.started") {
@@ -71,27 +92,30 @@ socket.addEventListener("message", (event) => {
   }
 
   if (data.type === "ai.response.completed") {
+    addDiagnostic("Streaming LLM completado.");
     currentAssistantMessage = null;
   }
 
   if (data.type === "tts.started") {
-    addMessage("system", `Generando audio segmento ${data.segment}...`);
+    addDiagnostic(`Generando audio segmento ${data.segment}...`);
   }
 
   if (data.type === "tts.segment.completed") {
+    addDiagnostic(`Segmento TTS ${data.segment ?? "?"} listo para reproducir.`);
     queueAudio(data.mime_type, data.audio);
   }
 
   if (data.type === "tts.completed") {
-    addMessage("system", `TTS completado en ${data.segments} segmento(s).`);
+    addDiagnostic(`TTS completado en ${data.segments} segmento(s).`);
   }
 
   if (data.type === "metrics") {
-    addMessage("system", `Metricas: ${JSON.stringify(data.metrics)}`);
+    addDiagnostic(`Metricas: ${JSON.stringify(data.metrics)}`);
   }
 
   if (data.type === "error") {
     addMessage("error", data.message);
+    addDiagnostic(`Error: ${data.message}`);
     setStatus("Error", "error");
   }
 });
@@ -145,7 +169,7 @@ function startVad(stream) {
     }
 
     if (silentFrames > 18 && mediaRecorder?.state === "recording") {
-      addMessage("system", "Silencio detectado, cerrando utterance...");
+      addDiagnostic("Silencio detectado, cerrando utterance...");
       stopRecording();
     }
   }, 100);
@@ -185,7 +209,7 @@ recordButton.addEventListener("click", async () => {
   mediaRecorder.addEventListener("stop", () => {
     activeStream.getTracks().forEach((track) => track.stop());
     stopVad();
-    addMessage("system", "Procesando utterance...");
+    addDiagnostic("Procesando utterance...");
     sendJson({ type: "end_utterance" });
   });
 
@@ -205,4 +229,12 @@ textForm.addEventListener("submit", (event) => {
   addMessage("user", text);
   sendJson({ type: "text_message", text });
   textInput.value = "";
+});
+
+promptButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const prompt = button.dataset.prompt;
+    textInput.value = prompt;
+    textInput.focus();
+  });
 });
